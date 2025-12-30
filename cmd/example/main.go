@@ -28,11 +28,10 @@ type LoggerCallback struct {
 }
 
 func (cb *LoggerCallback) OnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
-	fmt.Printf("\n🔵 [%s] Start\n", info.Name)
 	// 打印 run_terminal_command 或其他工具的输入
 	if info.Name == "run_terminal_command" || info.Name == "list_skills" || info.Name == "view_skill" {
 		inputStr, _ := json.MarshalIndent(input, "", "  ")
-		fmt.Printf("👉 Input: %s\n", string(inputStr))
+		fmt.Printf("\n [%s] 👉 Input: %s\n", info.Name, string(inputStr))
 	}
 	return ctx
 }
