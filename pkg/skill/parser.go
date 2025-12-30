@@ -56,7 +56,11 @@ func (p *Parser) ParseMetadataOnly(path string) (*Frontmatter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close file %s: %v\n", path, closeErr)
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	var frontmatterLines []string

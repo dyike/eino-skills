@@ -87,4 +87,3 @@ func (t *ViewSkillTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 // Ensure ViewSkillTool implements tool.InvokableTool
 var _ tool.InvokableTool = (*ViewSkillTool)(nil)
-

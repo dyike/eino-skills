@@ -67,7 +67,10 @@ func listCmd(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	global := fs.Bool("global", false, "List only global skills")
 	project := fs.Bool("project", false, "List only project skills")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	loader := skill.NewLoader(
 		skill.WithGlobalSkillsDir("~/.claude/skills"),
@@ -112,23 +115,38 @@ func listCmd(ctx context.Context, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSOURCE\tPATH\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t------\t-----\t-----------")
+	if _, err := fmt.Fprintln(w, "NAME\tSOURCE\tPATH\tDESCRIPTION"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+		os.Exit(1)
+	}
+	if _, err := fmt.Fprintln(w, "----\t------\t-----\t-----------"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+		os.Exit(1)
+	}
 
 	for _, s := range skills {
 		desc := s.Description
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Name, s.Source, s.Path, desc)
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Name, s.Source, s.Path, desc); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+			os.Exit(1)
+		}
 	}
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error flushing output: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func createCmd(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 	global := fs.Bool("global", false, "Create in global skills directory")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	if fs.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: eino-skills create <skill-name>\n")
@@ -216,7 +234,10 @@ See [references/additional-docs.md](references/additional-docs.md) for more deta
 	}
 
 	for path, content := range placeholders {
-		os.WriteFile(path, []byte(content), 0644)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating file %s: %v\n", path, err)
+			os.Exit(1)
+		}
 	}
 
 	fmt.Printf("Created skill '%s' at %s\n", name, skillDir)
@@ -237,7 +258,10 @@ See [references/additional-docs.md](references/additional-docs.md) for more deta
 func viewCmd(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 	section := fs.String("section", "", "View specific section")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	if fs.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: eino-skills view <skill-name> [--section <section>]\n")
@@ -274,7 +298,10 @@ func viewCmd(ctx context.Context, args []string) {
 
 func validateCmd(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("validate", flag.ExitOnError)
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
 
 	if fs.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: eino-skills validate <skill-path>\n")
