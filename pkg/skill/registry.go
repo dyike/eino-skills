@@ -9,34 +9,91 @@ import (
 
 // Registry manages loaded skills and provides lookup functionality.
 type Registry struct {
-	mu       sync.RWMutex
-	skills   map[string]*Skill
-	metadata []SkillMetadata
-	loader   *Loader
+	mu        sync.RWMutex
+	skills    map[string]*Skill
+	metadata  []SkillMetadata
+	loader    *Loader
+	watcher   *Watcher
+	autoWatch bool
+}
+
+// RegistryOption configures the Registry.
+type RegistryOption func(*Registry)
+
+// WithAutoWatch enables automatic file watching after Initialize.
+// When enabled, the registry will automatically reload when SKILL.md files change.
+func WithAutoWatch(enabled bool) RegistryOption {
+	return func(r *Registry) {
+		r.autoWatch = enabled
+	}
 }
 
 // NewRegistry creates a new skills registry.
-func NewRegistry(loader *Loader) *Registry {
-	return &Registry{
+func NewRegistry(loader *Loader, opts ...RegistryOption) *Registry {
+	r := &Registry{
 		skills: make(map[string]*Skill),
 		loader: loader,
 	}
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r
+}
+
+// StartWatching begins monitoring skill directories for changes.
+// When changes are detected, the registry automatically reloads.
+func (r *Registry) StartWatching(ctx context.Context) error {
+	if r.watcher != nil {
+		return fmt.Errorf("watcher already started")
+	}
+
+	dirs := []string{r.loader.globalDir, r.loader.projectDir}
+	watcher, err := NewWatcher(r, dirs)
+	if err != nil {
+		return err
+	}
+
+	r.watcher = watcher
+	return watcher.Start(ctx)
+}
+
+// StopWatching stops monitoring skill directories.
+func (r *Registry) StopWatching() error {
+	if r.watcher == nil {
+		return nil
+	}
+
+	err := r.watcher.Stop()
+	r.watcher = nil
+	return err
 }
 
 // Initialize loads all skills from configured directories.
 func (r *Registry) Initialize(ctx context.Context) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	// Load metadata for system prompt
 	metadata, err := r.loader.LoadMetadataOnly(ctx)
 	if err != nil {
+		r.mu.Unlock()
 		return fmt.Errorf("failed to load skill metadata: %w", err)
 	}
 	r.metadata = metadata
 
 	// Clear existing skills
 	r.skills = make(map[string]*Skill)
+
+	r.mu.Unlock()
+
+	// Start watching if autoWatch is enabled
+	if r.autoWatch && r.watcher == nil {
+		if err := r.StartWatching(ctx); err != nil {
+			// Log warning but don't fail initialization
+			fmt.Printf("Warning: failed to start auto-watch: %v\n", err)
+		}
+	}
 
 	return nil
 }

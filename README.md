@@ -226,3 +226,16 @@ func main() {
 }
 ```
 
+## Feature Roadmap
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| 核心加载器/解析器 | ✅ | `loader.go`, `parser.go` - SKILL.md discovery & parsing |
+| Registry & 缓存 | ✅ | `registry.go` - on-demand loading with mutex-protected cache |
+| 中间件集成 | ✅ | `middleware/skills.go` - prompt injection & tool provisioning |
+| CLI 管理工具 | ✅ | `eino-skills-cli` - list, create, view, validate commands |
+| 热重载支持 | ✅ | `watcher.go` - fsnotify-based auto-reload on SKILL.md changes |
+| Skills 市场 | 🚧 | Remote skill installation (planned) |
+| allowed-tools 限制 | 🚧 | Restrict tool access per skill (planned) |
+| 可视化调试 | 🚧 | Skill execution tracing UI (planned) |
+| 版本管理 | 🚧 | Skill versioning & compatibility (planned) |

@@ -69,7 +69,7 @@ func main() {
 		skillpkg.WithGlobalSkillsDir("~/.claude/skills"),
 	)
 
-	registry := skillpkg.NewRegistry(loader)
+	registry := skillpkg.NewRegistry(loader, skillpkg.WithAutoWatch(true))
 	if err := registry.Initialize(ctx); err != nil {
 		fmt.Printf("Failed to initialize skills: %v\n", err)
 		return
