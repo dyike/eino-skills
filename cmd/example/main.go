@@ -25,6 +25,9 @@ import (
 // LoggerCallback 用于打印 Agent 执行过程中的各个步骤
 type LoggerCallback struct {
 	callbacks.HandlerBuilder // 继承 HandlerBuilder 来辅助实现 callback
+	totalInputTokens  int
+	totalOutputTokens int
+	totalTokens       int
 }
 
 func (cb *LoggerCallback) OnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
@@ -37,8 +40,21 @@ func (cb *LoggerCallback) OnStart(ctx context.Context, info *callbacks.RunInfo, 
 }
 
 func (cb *LoggerCallback) OnEnd(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
-	infoPayload, _ := json.Marshal(info)
-	fmt.Println("info==================", string(infoPayload))
+	// 尝试提取 token usage 信息
+	if chatOutput, ok := output.(*schema.Message); ok {
+		if chatOutput.ResponseMeta != nil && chatOutput.ResponseMeta.Usage != nil {
+			usage := chatOutput.ResponseMeta.Usage
+			cb.totalInputTokens += usage.PromptTokens
+			cb.totalOutputTokens += usage.CompletionTokens
+			cb.totalTokens += usage.TotalTokens
+
+			fmt.Printf("\n📊 [%s] Token Usage: Input=%d, Output=%d, Total=%d\n",
+				info.Name, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+			fmt.Printf("💰 Cumulative Tokens: Input=%d, Output=%d, Total=%d\n",
+				cb.totalInputTokens, cb.totalOutputTokens, cb.totalTokens)
+		}
+	}
+
 	// 打印工具执行结果
 	if info.Name == "run_terminal_command" || info.Name == "list_skills" || info.Name == "view_skill" {
 		outputStr, _ := json.MarshalIndent(output, "", "  ")
@@ -147,7 +163,10 @@ Always be concise, professional, and act like an expert engineer.`
 	fmt.Println("Try: '帮我写一个 git commit message' to test skills")
 	fmt.Println("---")
 
-	// 7. 交互式对话循环
+	// 7. 创建共享的 LoggerCallback 实例来累计整个会话的 token 使用
+	logger := &LoggerCallback{}
+
+	// 8. 交互式对话循环
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("\n> ")
@@ -162,6 +181,12 @@ Always be concise, professional, and act like an expert engineer.`
 			continue
 		}
 		if input == "quit" || input == "exit" {
+			fmt.Println("\n" + strings.Repeat("=", 50))
+			fmt.Println("📈 Session Summary - Total Token Usage:")
+			fmt.Printf("   Input Tokens:  %d\n", logger.totalInputTokens)
+			fmt.Printf("   Output Tokens: %d\n", logger.totalOutputTokens)
+			fmt.Printf("   Total Tokens:  %d\n", logger.totalTokens)
+			fmt.Println(strings.Repeat("=", 50))
 			fmt.Println("Goodbye!")
 			break
 		}
@@ -172,9 +197,9 @@ Always be concise, professional, and act like an expert engineer.`
 			{Role: schema.User, Content: input},
 		}
 
-		// 使用 callback 来打印 Node 状态，但不处理流
+		// 使用共享的 callback 实例来累计 token 使用
 		opts := []agent.AgentOption{
-			agent.WithComposeOptions(compose.WithCallbacks(&LoggerCallback{})),
+			agent.WithComposeOptions(compose.WithCallbacks(logger)),
 		}
 
 		fmt.Println("\n🤖 Thinking...")
@@ -187,6 +212,7 @@ Always be concise, professional, and act like an expert engineer.`
 		// 读取流式输出
 		var fullContent strings.Builder
 		seenToolCalls := make(map[string]bool)
+		startTokens := logger.totalTokens // 记录本次对话开始时的 token 数
 
 		for {
 			msg, err := streamReader.Recv()
@@ -215,6 +241,12 @@ Always be concise, professional, and act like an expert engineer.`
 		if fullContent.Len() > 0 {
 			fmt.Println("\n📝 Response:")
 			fmt.Println(fullContent.String())
+		}
+
+		// 打印本次对话的 token 使用统计
+		turnTokens := logger.totalTokens - startTokens
+		if turnTokens > 0 {
+			fmt.Printf("\n💡 This turn used %d tokens\n", turnTokens)
 		}
 	}
 }
