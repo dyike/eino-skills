@@ -52,9 +52,17 @@ func (cb *LoggerCallback) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 func (cb *LoggerCallback) UpdateTokenUsage(msg *schema.Message) {
 	if msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
 		usage := msg.ResponseMeta.Usage
+
+		// 调试：打印原始 usage 数据
+		usageJSON, _ := json.MarshalIndent(usage, "", "  ")
+		fmt.Printf("\n🔍 Raw Usage Data: %s\n", string(usageJSON))
+
 		cb.totalInputTokens += usage.PromptTokens
 		cb.totalOutputTokens += usage.CompletionTokens
 		cb.totalTokens += usage.TotalTokens
+
+		fmt.Printf("🔍 After update - Input: %d, Output: %d, Total: %d\n",
+			cb.totalInputTokens, cb.totalOutputTokens, cb.totalTokens)
 	}
 }
 
@@ -256,7 +264,8 @@ Always be concise, professional, and act like an expert engineer.`
 			fmt.Printf("\n📊 This Turn - Token Usage: Input=%d, Output=%d, Total=%d\n",
 				turnInputTokens, turnOutputTokens, turnTotalTokens)
 			fmt.Printf("💰 Cumulative Tokens: Input=%d, Output=%d, Total=%d\n",
-				logger.totalInputTokens, logger.totalOutputTokens, logger.totalTokens)
+				logger.totalInputTokens, logger.totalOutputTokens,
+				logger.totalInputTokens+logger.totalOutputTokens)
 		}
 	}
 }
