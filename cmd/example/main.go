@@ -49,21 +49,33 @@ func (cb *LoggerCallback) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 }
 
 // UpdateTokenUsage 用于从流式消息中更新 token 使用统计
-func (cb *LoggerCallback) UpdateTokenUsage(msg *schema.Message) {
-	if msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
-		usage := msg.ResponseMeta.Usage
-
-		// 调试：打印原始 usage 数据
-		usageJSON, _ := json.MarshalIndent(usage, "", "  ")
-		fmt.Printf("\n🔍 Raw Usage Data: %s\n", string(usageJSON))
-
-		cb.totalInputTokens += usage.PromptTokens
-		cb.totalOutputTokens += usage.CompletionTokens
-		cb.totalTokens += usage.TotalTokens
-
-		fmt.Printf("🔍 After update - Input: %d, Output: %d, Total: %d\n",
-			cb.totalInputTokens, cb.totalOutputTokens, cb.totalTokens)
+// promptTokens: 从流中收集到的 prompt tokens（可能为 0）
+// completionTokens: 从流中收集到的 completion tokens
+func (cb *LoggerCallback) UpdateTokenUsage(promptTokens, completionTokens int, inputMessages []*schema.Message) (estimated bool) {
+	// 如果 API 没有返回 prompt_tokens（代理问题），手动估算
+	if promptTokens == 0 && len(inputMessages) > 0 {
+		// 简单估算：英文 1 token ≈ 4 字符，中文 1 token ≈ 1.5 字符
+		// 这里使用保守估算：总字符数 / 3
+		totalChars := 0
+		for _, m := range inputMessages {
+			totalChars += len(m.Content)
+			// 也要计算 system prompt 和其他内容
+			for _, tc := range m.ToolCalls {
+				totalChars += len(tc.Function.Name) + len(tc.Function.Arguments)
+			}
+		}
+		promptTokens = totalChars / 3
+		if promptTokens == 0 {
+			promptTokens = 100 // 最小估值
+		}
+		estimated = true
 	}
+
+	cb.totalInputTokens += promptTokens
+	cb.totalOutputTokens += completionTokens
+	cb.totalTokens += promptTokens + completionTokens
+
+	return estimated
 }
 
 func (cb *LoggerCallback) OnError(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
@@ -217,7 +229,7 @@ Always be concise, professional, and act like an expert engineer.`
 		seenToolCalls := make(map[string]bool)
 		startInputTokens := logger.totalInputTokens
 		startOutputTokens := logger.totalOutputTokens
-		var lastMsg *schema.Message
+		var promptTokens, completionTokens int // 累积的 token 统计
 
 		for {
 			msg, err := streamReader.Recv()
@@ -229,8 +241,18 @@ Always be concise, professional, and act like an expert engineer.`
 				break
 			}
 
-			// 保存最后一条消息用于提取 token usage
-			lastMsg = msg
+			// 处理每条消息的 usage 信息
+			if msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
+				usage := msg.ResponseMeta.Usage
+				// prompt_tokens 通常只在第一条消息中非零，取非零值
+				if usage.PromptTokens > 0 {
+					promptTokens = usage.PromptTokens
+				}
+				// completion_tokens 是累积的，取最新的非零值
+				if usage.CompletionTokens > 0 {
+					completionTokens = usage.CompletionTokens
+				}
+			}
 
 			// 打印 tool calls
 			for _, tc := range msg.ToolCalls {
@@ -245,9 +267,10 @@ Always be concise, professional, and act like an expert engineer.`
 			fullContent.WriteString(msg.Content)
 		}
 
-		// 从最后一条消息中提取 token usage
-		if lastMsg != nil {
-			logger.UpdateTokenUsage(lastMsg)
+		// 更新 token 统计
+		var isEstimated bool
+		if promptTokens > 0 || completionTokens > 0 {
+			isEstimated = logger.UpdateTokenUsage(promptTokens, completionTokens, messages)
 		}
 
 		// 打印最终内容
@@ -261,11 +284,18 @@ Always be concise, professional, and act like an expert engineer.`
 		turnOutputTokens := logger.totalOutputTokens - startOutputTokens
 		turnTotalTokens := turnInputTokens + turnOutputTokens
 		if turnTotalTokens > 0 {
-			fmt.Printf("\n📊 This Turn - Token Usage: Input=%d, Output=%d, Total=%d\n",
-				turnInputTokens, turnOutputTokens, turnTotalTokens)
+			estimatedMark := ""
+			if isEstimated {
+				estimatedMark = " (Input estimated*)"
+			}
+			fmt.Printf("\n📊 This Turn - Token Usage: Input=%d, Output=%d, Total=%d%s\n",
+				turnInputTokens, turnOutputTokens, turnTotalTokens, estimatedMark)
 			fmt.Printf("💰 Cumulative Tokens: Input=%d, Output=%d, Total=%d\n",
 				logger.totalInputTokens, logger.totalOutputTokens,
 				logger.totalInputTokens+logger.totalOutputTokens)
+			if isEstimated {
+				fmt.Println("    * Input tokens estimated (API didn't return prompt_tokens)")
+			}
 		}
 	}
 }
