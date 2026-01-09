@@ -37,6 +37,8 @@ func (cb *LoggerCallback) OnStart(ctx context.Context, info *callbacks.RunInfo, 
 }
 
 func (cb *LoggerCallback) OnEnd(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
+	infoPayload, _ := json.Marshal(info)
+	fmt.Println("info==================", string(infoPayload))
 	// 打印工具执行结果
 	if info.Name == "run_terminal_command" || info.Name == "list_skills" || info.Name == "view_skill" {
 		outputStr, _ := json.MarshalIndent(output, "", "  ")
