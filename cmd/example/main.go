@@ -141,7 +141,12 @@ func main() {
 
 **CRITICAL INSTRUCTIONS FOR SKILL EXECUTION:**
 
-1. **DISCOVERY & LOADING**: Use 'list_skills' and 'view_skill' to understand the task.
+1. **DISCOVERY & LOADING (Token-Efficient)**:
+   - Use 'list_skills' to find relevant skills
+   - **ALWAYS use view_skill with toc=true FIRST** to see the structure (saves 80-90% tokens)
+   - Then use section parameter to load only the parts you need
+   - Example: view_skill(name='git-commit', toc=true) → see all sections → view_skill(name='git-commit', section='Instructions')
+   - Only load full content if absolutely necessary
 2. **STRICT STEP-BY-STEP EXECUTION**:
    - You MUST follow the loaded skill's workflow exactly as written.
    - **DO NOT SKIP STEPS**: If the skill defines an "Analysis", "Preparation", or "Check" phase, you MUST execute it before moving to the main action.
@@ -175,6 +180,15 @@ Always be concise, professional, and act like an expert engineer.`
 
 	fmt.Println("🚀 Eino Skills Agent Started!")
 	fmt.Println("Type 'quit' or 'exit' to exit.")
+	fmt.Println()
+	fmt.Println("💡 Token-Saving Tips:")
+	fmt.Println("   The view_skill tool now supports TOC (Table of Contents) mode!")
+	fmt.Println("   - Use toc=true to view structure first (saves 80-90% tokens)")
+	fmt.Println("   - Use section='SectionName' to load only needed parts")
+	fmt.Println("   - Example workflow:")
+	fmt.Println("     1. view_skill(name='git-commit', toc=true)  <- See structure")
+	fmt.Println("     2. view_skill(name='git-commit', section='Instructions')  <- Load specific part")
+	fmt.Println()
 	fmt.Println("Try: '帮我写一个 git commit message' to test skills")
 	fmt.Println("---")
 

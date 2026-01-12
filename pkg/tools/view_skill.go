@@ -23,6 +23,8 @@ type ViewSkillArgs struct {
 	Name string `json:"name"`
 	// Section optionally specifies a specific section to extract
 	Section string `json:"section,omitempty"`
+	// TOC when true, returns only the table of contents (all headings)
+	TOC bool `json:"toc,omitempty"`
 }
 
 // NewViewSkillTool creates a new view_skill tool.
@@ -39,7 +41,12 @@ func (t *ViewSkillTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 - You need detailed instructions for a specific workflow
 - The skill description indicates it's relevant to the current task
 
-The tool loads the complete SKILL.md content including instructions, examples, and best practices.`,
+The tool loads the complete SKILL.md content including instructions, examples, and best practices.
+
+Usage patterns:
+1. View structure: use toc=true to see all sections (table of contents)
+2. View specific section: use section parameter to extract a specific part
+3. View full content: use only name parameter`,
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"name": {
 				Type:     schema.String,
@@ -49,6 +56,11 @@ The tool loads the complete SKILL.md content including instructions, examples, a
 			"section": {
 				Type:     schema.String,
 				Desc:     "Optional: extract only a specific section by heading (e.g., 'Instructions', 'Examples')",
+				Required: false,
+			},
+			"toc": {
+				Type:     schema.Boolean,
+				Desc:     "Optional: when true, returns only the table of contents (all headings with indentation)",
 				Required: false,
 			},
 		}),
@@ -66,15 +78,30 @@ func (t *ViewSkillTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		return "", fmt.Errorf("skill name is required")
 	}
 
+	// toc and section are mutually exclusive
+	if args.TOC && args.Section != "" {
+		return "", fmt.Errorf("cannot specify both 'toc' and 'section' parameters")
+	}
+
 	// Load skill content
 	content, err := t.registry.GetContent(ctx, args.Name)
 	if err != nil {
 		return "", fmt.Errorf("failed to load skill '%s': %w", args.Name, err)
 	}
 
+	parser := skillpkg.NewParser()
+
+	// Extract TOC if requested
+	if args.TOC {
+		toc := parser.ExtractTOC(content)
+		if toc == "" {
+			return "No headings found in this skill.", nil
+		}
+		return toc, nil
+	}
+
 	// Extract specific section if requested
 	if args.Section != "" {
-		parser := skillpkg.NewParser()
 		sectionContent := parser.ExtractSection(content, args.Section)
 		if sectionContent == "" {
 			return "", fmt.Errorf("section '%s' not found in skill '%s'", args.Section, args.Name)

@@ -197,6 +197,32 @@ func (p *Parser) ExtractSection(body, heading string) string {
 	return strings.TrimSpace(strings.Join(result, "\n"))
 }
 
+// ExtractTOC extracts all markdown headings and returns a formatted table of contents.
+// Each heading is indented based on its level (H1 = no indent, H2 = 2 spaces, etc.).
+func (p *Parser) ExtractTOC(body string) string {
+	lines := strings.Split(body, "\n")
+	var toc []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			level := countPrefix(trimmed, '#')
+			headingText := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+
+			// Skip empty headings
+			if headingText == "" {
+				continue
+			}
+
+			// Calculate indentation: (level-1) * 2 spaces
+			indent := strings.Repeat(" ", (level-1)*2)
+			toc = append(toc, fmt.Sprintf("%s%s %s", indent, strings.Repeat("#", level), headingText))
+		}
+	}
+
+	return strings.Join(toc, "\n")
+}
+
 // countPrefix counts how many times a character appears at the start of a string.
 func countPrefix(s string, char rune) int {
 	count := 0
